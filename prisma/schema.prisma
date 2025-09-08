@@ -1,0 +1,162 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  prds          PRD[]
+  testCases     TestCase[]
+  prompts       Prompt[]
+  apiUsages     ApiUsage[]
+  prAnalyses    PRAnalysis[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model PRD {
+  id            String    @id @default(cuid())
+  title         String
+  userInput     String    @db.Text
+  content       String    @db.Text
+  status        PRDStatus @default(DRAFT)
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  
+  testCases     TestCase[]
+  chatHistory   ChatMessage[]
+}
+
+enum PRDStatus {
+  DRAFT
+  IN_REVIEW
+  COMPLETED
+}
+
+model ChatMessage {
+  id            String    @id @default(cuid())
+  role          String    // "user" | "assistant"
+  content       String    @db.Text
+  createdAt     DateTime  @default(now())
+  
+  prdId         String
+  prd           PRD       @relation(fields: [prdId], references: [id], onDelete: Cascade)
+}
+
+model GitHubPR {
+  id            String    @id @default(cuid())
+  url           String    @unique
+  owner         String
+  repo          String
+  prNumber      Int
+  title         String
+  description   String?   @db.Text
+  diff          String    @db.Text
+  commits       Json      // Array of commit info
+  analyzedAt    DateTime  @default(now())
+  
+  testCases     TestCase[]
+}
+
+model TestCase {
+  id            String    @id @default(cuid())
+  title         String
+  description   String    @db.Text
+  testType      TestType
+  steps         Json      // Array of test steps
+  expectedResult String   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  prdId         String?
+  prd           PRD?      @relation(fields: [prdId], references: [id], onDelete: Cascade)
+  
+  githubPRId    String?
+  githubPR      GitHubPR? @relation(fields: [githubPRId], references: [id], onDelete: Cascade)
+  
+  prAnalysisId  String?
+  prAnalysis    PRAnalysis? @relation(fields: [prAnalysisId], references: [id], onDelete: Cascade)
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+}
+
+enum TestType {
+  FUNCTIONAL
+  EDGE_CASE
+  REGRESSION
+  INTEGRATION
+  PERFORMANCE
+}
+
+model Prompt {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  type          PromptType
+  content       String    @db.Text
+  description   String?
+  isActive      Boolean   @default(true)
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+}
+
+enum PromptType {
+  PRD_GENERATION
+  TEST_CASE_GENERATION
+  CHAT_REFINEMENT
+  GITHUB_PR_ANALYSIS
+}
+
+model ApiUsage {
+  id            String    @id @default(cuid())
+  service       String    // "gemini" | "github" | "openai"
+  endpoint      String    // API endpoint or feature name
+  tokens        Int       @default(0)
+  cost          Float     @default(0)
+  success       Boolean   @default(true)
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  
+  @@index([userId, createdAt])
+}
+
+model PRAnalysis {
+  id            String    @id @default(cuid())
+  url           String
+  title         String
+  prData        Json      // Full PR data
+  analysis      String    @db.Text
+  analyzedAt    DateTime  @default(now())
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  
+  testCases     TestCase[]
+}
