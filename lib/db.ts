@@ -4,17 +4,27 @@ declare global {
   var prisma: PrismaClient | undefined
 }
 
-// Fix DATABASE_URL before creating Prisma client - use DIRECT_URL if available
-if (process.env.DIRECT_URL && !process.env.DIRECT_URL.includes('%40')) {
-  console.log('Using DIRECT_URL instead of DATABASE_URL')
-  process.env.DATABASE_URL = process.env.DIRECT_URL
-} else if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('%40')) {
-  // URL encode the password properly
+// Fix DATABASE_URL before creating Prisma client
+if (process.env.DATABASE_URL) {
   const originalUrl = process.env.DATABASE_URL
-  // Replace the problematic password encoding
-  const fixedUrl = originalUrl.replace('Ehdgh%400625', encodeURIComponent('Ehdgh@0625'))
+  
+  // Remove any whitespace from the URL
+  let fixedUrl = originalUrl.replace(/\s+/g, '')
+  
+  // The password Ehdgh@0625 needs special handling
+  // In the URL, the @ in the password must be %40
+  // But %400625 is wrong, it should be %400625 -> Ehdgh%400625
+  if (fixedUrl.includes('Ehdgh%400625')) {
+    // This is correct encoding, keep it
+    console.log('DATABASE_URL has correct encoding')
+  } else if (fixedUrl.includes('Ehdgh@0625')) {
+    // Need to encode the @ in password
+    fixedUrl = fixedUrl.replace('Ehdgh@0625', 'Ehdgh%400625')
+    console.log('Fixed @ encoding in password')
+  }
+  
   process.env.DATABASE_URL = fixedUrl
-  console.log('Fixed DATABASE_URL encoding in environment')
+  console.log('DATABASE_URL processed')
 }
 
 const prismaClientSingleton = () => {
