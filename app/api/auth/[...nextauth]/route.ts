@@ -18,62 +18,53 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null
-        }
+        try {
+          console.log("Login attempt for:", credentials?.email)
+          
+          if (!credentials?.email) {
+            console.log("Missing email")
+            return null
+          }
 
-        // 사용자 조회
-        const user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email,
-          },
-        })
+          // 비밀번호는 1234만 허용 (임시)
+          if (credentials.password !== "1234") {
+            console.log("Wrong password - must be 1234")
+            return null
+          }
 
-        if (!user) {
-          // 신규 사용자는 비밀번호 1234로 자동 생성
-          const hashedPassword = await bcrypt.hash("1234", 10)
-          const newUser = await prisma.user.create({
-            data: {
+          // 사용자 조회
+          let user = await prisma.user.findUnique({
+            where: {
               email: credentials.email,
-              password: hashedPassword,
-              name: credentials.email.split('@')[0],
             },
           })
-          
-          // 신규 사용자는 입력한 비밀번호가 1234인 경우만 로그인 허용
-          if (credentials.password === "1234") {
-            return {
-              id: newUser.id,
-              email: newUser.email,
-              name: newUser.name,
+
+          if (!user) {
+            console.log("User not found, creating new user")
+            // 신규 사용자 생성 (password 필드 제외)
+            try {
+              user = await prisma.user.create({
+                data: {
+                  email: credentials.email,
+                  name: credentials.email.split('@')[0],
+                },
+              })
+              console.log("New user created:", user.email)
+            } catch (error) {
+              console.error("Error creating user:", error)
+              return null
             }
           }
+
+          console.log("Login successful for:", user.email)
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          }
+        } catch (error) {
+          console.error("Auth error:", error)
           return null
-        }
-
-        // 기존 사용자는 비밀번호 검증
-        if (user.password) {
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
-          if (!isPasswordValid) {
-            return null
-          }
-        } else {
-          // 비밀번호가 없는 기존 사용자는 1234로 설정
-          if (credentials.password === "1234") {
-            const hashedPassword = await bcrypt.hash("1234", 10)
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { password: hashedPassword }
-            })
-          } else {
-            return null
-          }
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
         }
       },
     }),
