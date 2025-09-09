@@ -17,20 +17,28 @@ export default function SignIn() {
     setLoading(true)
 
     try {
+      console.log('Attempting login with:', email)
       const result = await signIn('credentials', {
         email,
         password,
         redirect: false,
       })
 
+      console.log('Login result:', result)
+
       if (result?.error) {
-        setError('로그인에 실패했습니다.')
-      } else {
+        setError(`로그인 실패: ${result.error}`)
+        console.error('Login error:', result.error)
+      } else if (result?.ok) {
+        console.log('Login successful, redirecting...')
         router.push('/')
         router.refresh()
+      } else {
+        setError('알 수 없는 오류가 발생했습니다.')
       }
     } catch (error) {
-      setError('오류가 발생했습니다.')
+      console.error('Login exception:', error)
+      setError(`오류: ${error}`)
     } finally {
       setLoading(false)
     }
@@ -73,9 +81,10 @@ export default function SignIn() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                placeholder="••••••••"
+                placeholder="1234"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">비밀번호는 1234 입니다</p>
             </div>
 
             {error && (
