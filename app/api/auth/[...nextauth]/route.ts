@@ -1,6 +1,7 @@
 import NextAuth from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { NextAuthOptions } from "next-auth"
+import { prisma } from "@/lib/db"
 
 // 환경변수 검증
 if (!process.env.NEXTAUTH_SECRET) {
@@ -32,15 +33,45 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // 데이터베이스 없이 임시로 사용자 반환
-        const user = {
-          id: credentials.email,
-          email: credentials.email,
-          name: credentials.email.split('@')[0],
-        }
+        try {
+          // DB 연결 시도
+          let user = await prisma.user.findUnique({
+            where: {
+              email: credentials.email,
+            },
+          })
 
-        console.log("Login successful for:", user.email)
-        return user
+          if (!user) {
+            console.log("User not found, creating new user")
+            user = await prisma.user.create({
+              data: {
+                email: credentials.email,
+                name: credentials.email.split('@')[0],
+              },
+            })
+            console.log("New user created in DB:", user.email)
+          } else {
+            console.log("Existing user found in DB:", user.email)
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          }
+        } catch (dbError) {
+          console.error("Database error, falling back to in-memory:", dbError)
+          
+          // DB 연결 실패 시 메모리 기반 인증
+          const user = {
+            id: credentials.email,
+            email: credentials.email,
+            name: credentials.email.split('@')[0],
+          }
+
+          console.log("Using in-memory auth for:", user.email)
+          return user
+        }
       },
     }),
   ],
@@ -63,6 +94,7 @@ export const authOptions: NextAuthOptions = {
     error: "/auth/error",
   },
   secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === "development",
 }
 
 const handler = NextAuth(authOptions)
