@@ -5,7 +5,21 @@ declare global {
 }
 
 const prismaClientSingleton = () => {
+  // Fix DATABASE_URL encoding issue
+  let databaseUrl = process.env.DATABASE_URL
+  
+  if (databaseUrl && databaseUrl.includes('%40')) {
+    // Replace %40 with @ in the password part only
+    databaseUrl = databaseUrl.replace('Ehdgh%400625', 'Ehdgh@0625')
+    console.log('Fixed DATABASE_URL encoding')
+  }
+  
   return new PrismaClient({
+    datasources: {
+      db: {
+        url: databaseUrl || process.env.DATABASE_URL
+      }
+    },
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   })
 }
