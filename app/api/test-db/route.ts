@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server'
 import { prisma, testConnection } from '@/lib/db'
 
 export async function GET() {
+  // Fix URL encoding before testing
+  let fixedUrl = process.env.DATABASE_URL
+  if (fixedUrl && fixedUrl.includes('%40')) {
+    fixedUrl = fixedUrl.replace('%40', '@')
+  }
+
   const results = {
     envVars: {
       DATABASE_URL: process.env.DATABASE_URL ? 'Set' : 'Not set',
-      DATABASE_URL_PREVIEW: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 50) + '...' : 'Not set',
+      DATABASE_URL_ORIGINAL: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 80) + '...' : 'Not set',
+      DATABASE_URL_FIXED: fixedUrl ? fixedUrl.substring(0, 80) + '...' : 'Not set',
       NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ? 'Set' : 'Not set',
       NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'Not set',
       NODE_ENV: process.env.NODE_ENV || 'Not set',
