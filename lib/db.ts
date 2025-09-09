@@ -6,7 +6,20 @@ declare global {
 
 // Fix DATABASE_URL before creating Prisma client
 if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('%40')) {
-  const fixedUrl = process.env.DATABASE_URL.replace('%40', '@')
+  let fixedUrl = process.env.DATABASE_URL.replace('%40', '@')
+  
+  // Check if password has @ symbol that needs to be encoded
+  const urlMatch = fixedUrl.match(/^postgresql:\/\/([^:]+):([^@]+)@(.+)$/)
+  if (urlMatch) {
+    const [, username, password, hostAndDb] = urlMatch
+    // If password contains @, we need to encode it
+    if (password.includes('@')) {
+      const encodedPassword = password.replace('@', '%40')
+      fixedUrl = `postgresql://${username}:${encodedPassword}@${hostAndDb}`
+      console.log('Re-encoded @ symbol in password')
+    }
+  }
+  
   // Override the environment variable
   process.env.DATABASE_URL = fixedUrl
   console.log('Fixed DATABASE_URL encoding in environment')
