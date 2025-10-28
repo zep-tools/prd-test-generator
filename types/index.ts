@@ -52,9 +52,22 @@ export interface ChatMessage {
 export interface PromptTemplate {
   id: string
   name: string
-  type: 'prd_generation' | 'test_case_generation' | 'chat_refinement'
+  type: 'prd_generation' | 'test_case_generation' | 'chat_refinement' | 'github_pr_analysis'
   content: string
   description?: string
   isActive: boolean
   version: number
+}
+
+export interface PromptHistory {
+  id: string
+  promptId: string
+  name: string
+  type: string
+  content: string
+  description: string
+  version: number
+  savedAt: string
+  savedBy?: string
+  changeNote?: string
 }

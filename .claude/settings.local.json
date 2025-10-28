@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(if [ ! -f .env.local ])",
+      "Bash(then cp .env.example .env.local)",
+      "Bash(else echo \".env.local 파일이 이미 존재합니다.\")",
+      "Bash(fi)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

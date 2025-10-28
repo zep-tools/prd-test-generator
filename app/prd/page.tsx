@@ -371,8 +371,56 @@ export default function PRDPage() {
                     </div>
                     
                     <div className="flex-1 p-5 overflow-y-auto">
-                      <div className="prose prose-blue max-w-none prose-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <div className="prose prose-blue max-w-none prose-sm 
+                        prose-headings:text-gray-900 
+                        prose-h1:text-2xl prose-h1:font-bold prose-h1:border-b prose-h1:pb-2 prose-h1:mb-4
+                        prose-h2:text-xl prose-h2:font-bold prose-h2:mt-6 prose-h2:mb-3
+                        prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
+                        prose-p:text-gray-700 prose-p:leading-relaxed prose-p:mb-3
+                        prose-ul:space-y-1 prose-ul:my-3
+                        prose-li:text-gray-700
+                        prose-strong:text-gray-900 prose-strong:font-semibold
+                        prose-blockquote:border-l-4 prose-blockquote:border-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:italic prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:my-4
+                        prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono prose-code:text-gray-800
+                        prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:p-4 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:my-4
+                        prose-table:border-collapse prose-table:w-full prose-table:my-4
+                        prose-th:bg-gray-100 prose-th:border prose-th:border-gray-300 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-semibold
+                        prose-td:border prose-td:border-gray-300 prose-td:px-3 prose-td:py-2
+                        prose-hr:my-6 prose-hr:border-gray-300">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            // 체크박스 스타일링
+                            input: ({node, ...props}) => {
+                              if (props.type === 'checkbox') {
+                                return (
+                                  <input 
+                                    {...props} 
+                                    className="mr-2" 
+                                    onChange={() => {}} // 빈 onChange로 경고 제거
+                                    style={{ pointerEvents: 'none' }} // 클릭 비활성화
+                                  />
+                                )
+                              }
+                              return <input {...props} />
+                            },
+                            // 코드 블록 스타일링
+                            code: ({node, inline, className, children, ...props}) => {
+                              const match = /language-(\w+)/.exec(className || '');
+                              return !inline && match ? (
+                                <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto my-4">
+                                  <code className={className} {...props}>
+                                    {children}
+                                  </code>
+                                </pre>
+                              ) : (
+                                <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono text-gray-800" {...props}>
+                                  {children}
+                                </code>
+                              )
+                            }
+                          }}
+                        >
                           {prdContent}
                         </ReactMarkdown>
                       </div>

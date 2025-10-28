@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const TEST_CASE_PROMPT = `당신은 숙련된 QA 엔지니어입니다. 다음 정보를 바탕으로 상세한 테스트 케이스를 생성해주세요.
+const TEST_CASE_PROMPT = `당신은 숙련된 QA 엔지니어입니다. 다음 정보를 바탕으로 최소 10개 이상의 상세한 테스트 케이스를 생성해주세요.
 
 {context}
 
 요청된 테스트 유형: {testTypes}
+
+**중요: 반드시 10개 이상의 테스트 케이스를 생성하세요!**
 
 각 테스트 케이스는 다음 형식으로 작성해주세요:
 
@@ -16,17 +18,33 @@ const TEST_CASE_PROMPT = `당신은 숙련된 QA 엔지니어입니다. 다음 �
 테스트 단계:
 1. [동작]: [구체적인 동작 설명] | [예상 결과]: [해당 단계의 예상 결과]
 2. [동작]: [구체적인 동작 설명] | [예상 결과]: [해당 단계의 예상 결과]
-...
+3. [동작]: [구체적인 동작 설명] | [예상 결과]: [해당 단계의 예상 결과]
 최종 예상 결과: [전체 테스트의 최종 예상 결과]
 
 ---
 
+테스트 케이스 2:
+제목: [명확하고 구체적인 테스트 제목]
+유형: [functional/edge_case/regression/integration/performance 중 하나]
+설명: [테스트의 목적과 범위 설명]
+테스트 단계:
+1. [동작]: [구체적인 동작 설명] | [예상 결과]: [해당 단계의 예상 결과]
+2. [동작]: [구체적인 동작 설명] | [예상 결과]: [해당 단계의 예상 결과]
+3. [동작]: [구체적인 동작 설명] | [예상 결과]: [해당 단계의 예상 결과]
+최종 예상 결과: [전체 테스트의 최종 예상 결과]
+
+---
+
+(10개 이상 계속...)
+
 다음 사항을 고려하여 테스트 케이스를 작성해주세요:
-1. 정상 경로(Happy Path) 테스트
-2. 경계값 및 예외 상황 테스트
-3. 에러 처리 및 복구 시나리오
-4. 성능 및 부하 테스트 (해당하는 경우)
-5. 보안 관련 테스트 (해당하는 경우)`;
+1. 정상 경로(Happy Path) 테스트 - 3개 이상
+2. 경계값 및 예외 상황 테스트 - 3개 이상
+3. 에러 처리 및 복구 시나리오 - 2개 이상
+4. 성능 및 부하 테스트 - 1개 이상
+5. 보안 관련 테스트 - 1개 이상
+
+**주어진 PRD와 PR 분석 내용을 반드시 참고하여 관련된 테스트 케이스를 생성하세요!**`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,11 +77,26 @@ export async function POST(request: NextRequest) {
     }
     
     // 커스텀 프롬프트가 있으면 사용, 없으면 기본 프롬프트 사용
-    const promptTemplate = customPrompt || TEST_CASE_PROMPT;
+    let promptTemplate = customPrompt || TEST_CASE_PROMPT;
     
+    // 프롬프트에 필수 placeholder가 있는지 확인
+    const hasPlaceholders = promptTemplate.includes("{context}") && 
+                          promptTemplate.includes("{testTypes}");
+    
+    if (customPrompt && !hasPlaceholders) {
+      console.log("WARNING: Custom prompt doesn't have required placeholders, using default");
+      promptTemplate = TEST_CASE_PROMPT;
+    }
+    
+    // replaceAll 사용하여 모든 placeholder 치환
     const prompt = promptTemplate
-      .replace("{context}", context)
-      .replace("{testTypes}", testTypes.join(", "));
+      .replaceAll("{context}", context)
+      .replaceAll("{testTypes}", testTypes.join(", "));
+    
+    console.log("=== Test Case Generation ===");
+    console.log("Context length:", context.length);
+    console.log("Test types:", testTypes);
+    console.log("Prompt length:", prompt.length);
     
     // Gemini API 키 확인
     if (!process.env.GEMINI_API_KEY) {
@@ -74,12 +107,55 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Gemini API 사용
+    // Gemini API 사용 with retry logic
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      }
+    });
     
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    // 추가 지시사항 포함
+    const enhancedPrompt = prompt + "\n\n**반드시 최소 10개 이상의 테스트 케이스를 생성하고, 제공된 PRD와 PR 분석 내용과 직접적으로 관련된 테스트를 작성하세요.**";
+    
+    let text = "";
+    let retries = 3;
+    let lastError = null;
+    
+    // Retry logic for 503 errors
+    while (retries > 0) {
+      try {
+        const result = await model.generateContent(enhancedPrompt);
+        text = result.response.text();
+        break; // Success, exit loop
+      } catch (error: any) {
+        lastError = error;
+        console.log(`Gemini API error (${retries} retries left):`, error.message);
+        
+        // Check if it's a 503 overload error
+        if (error.message?.includes("503") || error.message?.includes("overloaded")) {
+          retries--;
+          if (retries > 0) {
+            // Wait before retry (exponential backoff)
+            const waitTime = (4 - retries) * 2000; // 2s, 4s, 6s
+            console.log(`Waiting ${waitTime}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          }
+        }
+        
+        // If not a 503 error or no retries left, throw the error
+        throw error;
+      }
+    }
+    
+    if (!text && lastError) {
+      throw lastError;
+    }
     
     // 텍스트 파싱하여 구조화된 테스트 케이스로 변환
     const testCases = parseTestCases(text);

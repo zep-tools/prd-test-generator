@@ -1,6 +1,7 @@
 // 프롬프트 관리 유틸리티
 
 export const PROMPT_STORAGE_KEY = "prd_generator_prompts";
+export const PROMPT_HISTORY_KEY = "prd_generator_prompt_history";
 
 export interface StoredPrompt {
   id: string;
@@ -10,6 +11,19 @@ export interface StoredPrompt {
   description: string;
   isActive: boolean;
   version: number;
+}
+
+export interface PromptHistory {
+  id: string;
+  promptId: string;
+  name: string;
+  type: string;
+  content: string;
+  description: string;
+  version: number;
+  savedAt: string;
+  savedBy?: string;
+  changeNote?: string;
 }
 
 // 기본 PRD 생성 프롬프트 (전문가 수준)
@@ -493,4 +507,81 @@ export function getPRDPrompt(): string {
 export function getTestCasePrompt(): string {
   const storedPrompt = getActivePrompt('test_case_generation');
   return storedPrompt || DEFAULT_TEST_CASE_PROMPT;
+}
+
+// 프롬프트 히스토리 관련 함수들
+export function getPromptHistory(): PromptHistory[] {
+  if (typeof window === 'undefined') return [];
+  
+  const stored = localStorage.getItem(PROMPT_HISTORY_KEY);
+  if (!stored) return [];
+  
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+export function savePromptHistory(history: PromptHistory[]): void {
+  if (typeof window === 'undefined') return;
+  
+  localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(history));
+}
+
+export function addPromptToHistory(prompt: StoredPrompt, changeNote?: string): void {
+  const history = getPromptHistory();
+  const historyEntry: PromptHistory = {
+    id: `history_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    promptId: prompt.id,
+    name: prompt.name,
+    type: prompt.type,
+    content: prompt.content,
+    description: prompt.description,
+    version: prompt.version,
+    savedAt: new Date().toISOString(),
+    changeNote
+  };
+  
+  history.push(historyEntry);
+  
+  // 각 프롬프트 타입별로 최대 20개까지만 보관
+  const typeHistories = history.filter(h => h.promptId === prompt.id);
+  if (typeHistories.length > 20) {
+    const toRemove = typeHistories.slice(0, typeHistories.length - 20);
+    const filteredHistory = history.filter(h => !toRemove.includes(h));
+    savePromptHistory(filteredHistory);
+  } else {
+    savePromptHistory(history);
+  }
+}
+
+export function getPromptHistoryByType(promptId: string): PromptHistory[] {
+  const history = getPromptHistory();
+  return history
+    .filter(h => h.promptId === promptId)
+    .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+}
+
+export function deletePromptHistory(historyId: string): void {
+  const history = getPromptHistory();
+  const filtered = history.filter(h => h.id !== historyId);
+  savePromptHistory(filtered);
+}
+
+export function restorePromptFromHistory(historyId: string): StoredPrompt | null {
+  const history = getPromptHistory();
+  const historyItem = history.find(h => h.id === historyId);
+  
+  if (!historyItem) return null;
+  
+  return {
+    id: historyItem.promptId,
+    name: historyItem.name,
+    type: historyItem.type,
+    content: historyItem.content,
+    description: historyItem.description,
+    isActive: true,
+    version: historyItem.version
+  };
 }

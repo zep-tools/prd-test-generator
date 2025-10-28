@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Octokit } from "octokit";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getGitHubAnalysisPrompt } from "@/lib/prompts";
 
 export async function POST(request: NextRequest) {
   try {
@@ -81,43 +82,67 @@ export async function POST(request: NextRequest) {
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (geminiApiKey && geminiApiKey !== "your-gemini-api-key") {
       try {
-        // 커스텀 프롬프트가 있으면 사용, 없으면 기본 프롬프트 사용
-        let analysisPrompt;
+        // 관리자 페이지에서 설정한 프롬프트 가져오기 (우선순위: customPrompt > 관리자 설정 > 기본값)
+        let promptTemplate = customPrompt || getGitHubAnalysisPrompt();
         
-        if (customPrompt) {
-          // 프롬프트의 변수 치환
-          analysisPrompt = customPrompt
-            .replace('{title}', pr.title)
-            .replace('{description}', pr.body || "설명 없음")
-            .replace('{filesCount}', files.length.toString())
-            .replace('{fileChanges}', fileChanges.map(f => `- ${f.filename}: +${f.additions} -${f.deletions} (${f.status})`).join('\n'))
-            .replace('{commits}', commits.map(c => `- ${c.commit.message}`).join('\n'));
-        } else {
-          analysisPrompt = `다음 GitHub PR을 분석해주세요:
-
-제목: ${pr.title}
-설명: ${pr.body || "설명 없음"}
-
-변경된 파일 (${files.length}개):
-${fileChanges.map(f => `- ${f.filename}: +${f.additions} -${f.deletions} (${f.status})`).join('\n')}
-
-커밋 메시지들:
-${commits.map(c => `- ${c.commit.message}`).join('\n')}
-
-다음 관점에서 분석해주세요:
-1. 주요 변경사항 요약
-2. 영향받는 기능/모듈
-3. 잠재적 리스크
-4. 테스트가 필요한 영역
-5. 코드 품질 개선 제안`;
-        }
+        // 프롬프트의 변수 치환 (replaceAll 사용)
+        const analysisPrompt = promptTemplate
+          .replaceAll('{title}', pr.title)
+          .replaceAll('{description}', pr.body || "설명 없음")
+          .replaceAll('{filesCount}', files.length.toString())
+          .replaceAll('{fileChanges}', fileChanges.map(f => `- ${f.filename}: +${f.additions} -${f.deletions} (${f.status})`).join('\n'))
+          .replaceAll('{commits}', commits.map(c => `- ${c.commit.message}`).join('\n'));
+        
+        console.log("=== GitHub PR Analysis ===");
+        console.log("Using prompt from:", customPrompt ? "Custom" : "Admin Settings");
+        console.log("Prompt template length:", promptTemplate.length);
+        console.log("First 200 chars:", promptTemplate.substring(0, 200));
 
         const genAI = new GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ 
+          model: "gemini-1.5-flash",
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 8192,
+          }
+        });
         
-        const result = await model.generateContent(analysisPrompt);
-        const response = await result.response;
-        analysis = response.text();
+        // Retry logic for 503 errors
+        let retries = 3;
+        let lastError = null;
+        
+        while (retries > 0) {
+          try {
+            const result = await model.generateContent(analysisPrompt);
+            const response = await result.response;
+            analysis = response.text();
+            break; // Success, exit loop
+          } catch (error: any) {
+            lastError = error;
+            console.log(`Gemini API error in PR analysis (${retries} retries left):`, error.message);
+            
+            // Check if it's a 503 overload error
+            if (error.message?.includes("503") || error.message?.includes("overloaded")) {
+              retries--;
+              if (retries > 0) {
+                // Wait before retry (exponential backoff)
+                const waitTime = (4 - retries) * 2000; // 2s, 4s, 6s
+                console.log(`Waiting ${waitTime}ms before retry...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                continue;
+              }
+            }
+            
+            // If not a 503 error or no retries left, throw the error
+            throw error;
+          }
+        }
+        
+        if (!analysis && lastError) {
+          throw lastError;
+        }
       } catch (aiError) {
         console.error("Gemini API Error:", aiError);
         analysis = `## PR 분석 결과 (Mock)

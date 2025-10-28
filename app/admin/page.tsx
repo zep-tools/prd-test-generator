@@ -1,8 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PromptTemplate } from "@/types";
-import { getStoredPrompts, savePrompts, PROMPT_STORAGE_KEY } from "@/lib/prompts";
+import { PromptTemplate, PromptHistory } from "@/types";
+import { 
+  getStoredPrompts, 
+  savePrompts, 
+  PROMPT_STORAGE_KEY,
+  addPromptToHistory,
+  getPromptHistoryByType,
+  deletePromptHistory,
+  restorePromptFromHistory
+} from "@/lib/prompts";
 import { getUsageSummary, resetApiUsage } from "@/lib/api-usage";
 
 export default function AdminPage() {
@@ -10,10 +18,14 @@ export default function AdminPage() {
   const [prompts, setPrompts] = useState<PromptTemplate[]>([]);
   const [selectedPrompt, setSelectedPrompt] = useState<PromptTemplate | null>(null);
   const [editingPrompt, setEditingPrompt] = useState<string>("");
+  const [changeNote, setChangeNote] = useState<string>("");
   const [testInput, setTestInput] = useState("");
   const [testResult, setTestResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [usageSummary, setUsageSummary] = useState<any>(null);
+  const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<PromptHistory | null>(null);
 
   const defaultPrompts: PromptTemplate[] = [
     {
@@ -65,6 +77,13 @@ export default function AdminPage() {
     loadUsageSummary();
   }, []);
 
+  useEffect(() => {
+    if (selectedPrompt) {
+      const history = getPromptHistoryByType(selectedPrompt.id);
+      setPromptHistory(history);
+    }
+  }, [selectedPrompt]);
+
   const loadUsageSummary = () => {
     setUsageSummary(getUsageSummary());
   };
@@ -78,22 +97,57 @@ export default function AdminPage() {
   };
 
   const savePrompt = async () => {
-    if (!selectedPrompt) return;
+    if (!selectedPrompt || !editingPrompt.trim()) return;
     setIsLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const updatedPrompt = {
+        ...selectedPrompt,
+        content: editingPrompt,
+        version: selectedPrompt.version + 1
+      };
+      
+      // 히스토리에 추가
+      addPromptToHistory(updatedPrompt, changeNote);
+      
+      // 프롬프트 업데이트
       const updatedPrompts = prompts.map(p => 
-        p.id === selectedPrompt.id 
-          ? { ...p, content: editingPrompt, version: p.version + 1 }
-          : p
+        p.id === selectedPrompt.id ? updatedPrompt : p
       );
       setPrompts(updatedPrompts);
       savePrompts(updatedPrompts);
-      alert("프롬프트가 저장되었습니다.");
+      setSelectedPrompt(updatedPrompt);
+      
+      // 히스토리 새로고침
+      const newHistory = getPromptHistoryByType(selectedPrompt.id);
+      setPromptHistory(newHistory);
+      
+      setChangeNote("");
+      alert("프롬프트가 저장되었습니다. (버전 " + updatedPrompt.version + ")");
     } catch (error) {
       alert("저장 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const restoreFromHistory = (historyItem: PromptHistory) => {
+    if (!confirm(`버전 ${historyItem.version}으로 복원하시겠습니까?`)) return;
+    
+    setEditingPrompt(historyItem.content);
+    setChangeNote(`버전 ${historyItem.version}으로 복원`);
+    setSelectedHistoryItem(historyItem);
+    setShowHistory(false);
+  };
+
+  const deleteHistoryItem = (historyId: string) => {
+    if (!confirm("이 버전을 삭제하시겠습니까?")) return;
+    
+    deletePromptHistory(historyId);
+    if (selectedPrompt) {
+      const newHistory = getPromptHistoryByType(selectedPrompt.id);
+      setPromptHistory(newHistory);
     }
   };
 
@@ -117,6 +171,17 @@ export default function AdminPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -182,6 +247,8 @@ export default function AdminPage() {
                       onClick={() => {
                         setSelectedPrompt(prompt);
                         setEditingPrompt(prompt.content);
+                        setShowHistory(false);
+                        setChangeNote("");
                       }}
                       className={`w-full text-left p-4 border rounded-xl hover:shadow-sm transition-all ${
                         selectedPrompt?.id === prompt.id 
@@ -206,31 +273,135 @@ export default function AdminPage() {
             <div className="lg:col-span-2">
               {selectedPrompt ? (
                 <div className="space-y-6">
-                  <div>
-                    <h2 className="text-lg font-semibold mb-4">프롬프트 편집</h2>
+                  {/* 프롬프트 편집 섹션 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-lg font-semibold">프롬프트 편집</h2>
+                      <button
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        버전 히스토리 ({promptHistory.length})
+                      </button>
+                    </div>
+
+                    {selectedHistoryItem && (
+                      <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="text-sm text-yellow-800">
+                          버전 {selectedHistoryItem.version}으로 복원됨 
+                          <span className="text-xs text-yellow-600 ml-2">
+                            ({formatDate(selectedHistoryItem.savedAt)})
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     <textarea
                       className="w-full h-64 p-3 border rounded-lg font-mono text-sm"
                       value={editingPrompt}
                       onChange={(e) => setEditingPrompt(e.target.value)}
                     />
+                    
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        변경 사항 메모 (선택사항)
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full p-2 border rounded-lg text-sm"
+                        value={changeNote}
+                        onChange={(e) => setChangeNote(e.target.value)}
+                        placeholder="예: 응답 형식 개선, 더 상세한 분석 추가..."
+                      />
+                    </div>
+
                     <div className="flex gap-2 mt-4">
                       <button
                         onClick={savePrompt}
                         disabled={isLoading}
                         className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
                       >
-                        저장
+                        저장 (v{selectedPrompt.version + 1})
                       </button>
                       <button
-                        onClick={() => setEditingPrompt(selectedPrompt.content)}
+                        onClick={() => {
+                          setEditingPrompt(selectedPrompt.content);
+                          setSelectedHistoryItem(null);
+                          setChangeNote("");
+                        }}
                         className="px-4 py-2 border rounded-md hover:bg-gray-50"
                       >
-                        초기화
+                        현재 버전으로 초기화
                       </button>
                     </div>
                   </div>
 
-                  <div>
+                  {/* 버전 히스토리 섹션 */}
+                  {showHistory && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                      <h3 className="text-lg font-semibold mb-4">버전 히스토리</h3>
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {promptHistory.length > 0 ? (
+                          promptHistory.map((history) => (
+                            <div
+                              key={history.id}
+                              className="p-4 border rounded-lg hover:bg-gray-50"
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <span className="font-medium text-gray-900">
+                                    버전 {history.version}
+                                  </span>
+                                  <span className="text-sm text-gray-500 ml-2">
+                                    {formatDate(history.savedAt)}
+                                  </span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => restoreFromHistory(history)}
+                                    className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                  >
+                                    복원
+                                  </button>
+                                  <button
+                                    onClick={() => deleteHistoryItem(history.id)}
+                                    className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              </div>
+                              {history.changeNote && (
+                                <div className="text-sm text-gray-600 italic">
+                                  "{history.changeNote}"
+                                </div>
+                              )}
+                              <div className="mt-2">
+                                <details className="cursor-pointer">
+                                  <summary className="text-sm text-gray-500 hover:text-gray-700">
+                                    내용 미리보기
+                                  </summary>
+                                  <div className="mt-2 p-3 bg-gray-50 rounded text-xs font-mono overflow-x-auto">
+                                    {history.content.substring(0, 300)}...
+                                  </div>
+                                </details>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center text-gray-500 py-8">
+                            아직 저장된 버전이 없습니다
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 프롬프트 테스트 섹션 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h3 className="text-lg font-semibold mb-4">프롬프트 테스트</h3>
                     <div className="space-y-4">
                       <div>
@@ -265,8 +436,10 @@ export default function AdminPage() {
                   </div>
                 </div>
               ) : (
-                <div className="text-center text-gray-500 py-12">
-                  프롬프트를 선택하여 편집하세요
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12">
+                  <div className="text-center text-gray-500">
+                    프롬프트를 선택하여 편집하세요
+                  </div>
                 </div>
               )}
             </div>
@@ -333,7 +506,7 @@ export default function AdminPage() {
                     </div>
                     <div className="p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 rounded-xl shadow-sm hover:shadow-md transition-all">
                       <div className="text-2xl font-bold text-yellow-700 mb-1">
-                        {Object.values(usageSummary.byService).reduce((sum, service) => sum + service.errors, 0)}
+                        {Object.values(usageSummary.byService).reduce((sum: number, service: any) => sum + service.errors, 0)}
                       </div>
                       <div className="text-sm font-medium text-yellow-600">오류 수</div>
                     </div>
@@ -343,7 +516,7 @@ export default function AdminPage() {
                     <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6">
                       <h4 className="text-lg font-bold text-gray-800 mb-4">서비스별 사용량</h4>
                       <div className="space-y-4">
-                        {Object.entries(usageSummary.byService).map(([service, data]) => (
+                        {Object.entries(usageSummary.byService).map(([service, data]: [string, any]) => (
                           <div key={service} className="p-4 bg-white rounded-lg border shadow-sm">
                             <div className="flex justify-between items-center mb-2">
                               <span className="font-bold text-gray-800 capitalize">{service}</span>
@@ -373,7 +546,7 @@ export default function AdminPage() {
                     <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl p-6">
                       <h4 className="text-lg font-bold text-gray-800 mb-4">기능별 사용량</h4>
                       <div className="space-y-4">
-                        {Object.entries(usageSummary.byEndpoint).map(([endpoint, data]) => (
+                        {Object.entries(usageSummary.byEndpoint).map(([endpoint, data]: [string, any]) => (
                           <div key={endpoint} className="p-4 bg-white rounded-lg border shadow-sm">
                             <div className="flex justify-between items-center mb-2">
                               <span className="font-bold text-gray-800">{endpoint.replace(/-/g, ' ')}</span>

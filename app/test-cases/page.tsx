@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import TestCasesContent from "./TestCasesContent";
+import TestCasesTable from "./TestCasesTable";
 
 export default function TestCasesPage() {
   return (
@@ -11,7 +11,7 @@ export default function TestCasesPage() {
         </div>
       </div>
     }>
-      <TestCasesContent />
+      <TestCasesTable />
     </Suspense>
   );
 }
