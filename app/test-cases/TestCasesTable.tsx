@@ -35,6 +35,9 @@ export default function TestCasesTable() {
   
   const [prdId, setPrdId] = useState(urlPrdId || "");
   const [prAnalysisId, setPrAnalysisId] = useState(urlPrAnalysisId || "");
+  const [figmaUrl, setFigmaUrl] = useState("");
+  const [figmaInfo, setFigmaInfo] = useState("");
+  const [isFetchingFigma, setIsFetchingFigma] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>(["functional", "edge_case", "regression"]);
@@ -132,11 +135,41 @@ export default function TestCasesTable() {
     const updatedTestCases = savedTestCases.filter(tc => tc.id !== id);
     setSavedTestCases(updatedTestCases);
     localStorage.setItem("savedTestCases", JSON.stringify(updatedTestCases));
-    
+
     if (currentTestCaseId === id) {
       setTestCases([]);
       setCurrentTestCaseId(null);
       setTestCaseTitle("");
+    }
+  };
+
+  const fetchFigmaData = async () => {
+    if (!figmaUrl.trim()) {
+      alert("Figma URL을 입력해주세요.");
+      return;
+    }
+
+    setIsFetchingFigma(true);
+    try {
+      const response = await fetch("/api/figma/fetch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ figmaUrl })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Figma 파일을 가져오는데 실패했습니다.");
+      }
+
+      setFigmaInfo(data.formattedInfo);
+      alert(`Figma 파일 "${data.fileName}"을(를) 불러왔습니다!`);
+    } catch (error: any) {
+      console.error("Error fetching Figma:", error);
+      alert(error.message || "Figma 파일을 가져오는 중 오류가 발생했습니다.");
+    } finally {
+      setIsFetchingFigma(false);
     }
   };
 
@@ -167,13 +200,14 @@ export default function TestCasesTable() {
 
       const { getTestCasePrompt } = await import("@/lib/prompts");
       const customPrompt = getTestCasePrompt();
-      
+
       const response = await fetch("/api/test-cases/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prdContent,
           prAnalysisContent,
+          figmaInfo,
           testTypes: selectedTypes,
           customPrompt
         })
@@ -396,6 +430,33 @@ export default function TestCasesTable() {
                             ))}
                           </select>
                         </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Figma 디자인 (선택사항)
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                              value={figmaUrl}
+                              onChange={(e) => setFigmaUrl(e.target.value)}
+                              placeholder="https://www.figma.com/file/..."
+                            />
+                            <button
+                              onClick={fetchFigmaData}
+                              disabled={isFetchingFigma || !figmaUrl.trim()}
+                              className="px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
+                            >
+                              {isFetchingFigma ? "불러오는 중..." : "불러오기"}
+                            </button>
+                          </div>
+                          {figmaInfo && (
+                            <div className="mt-2 text-xs text-green-600 bg-green-50 p-2 rounded-lg">
+                              ✓ Figma 디자인 정보가 로드되었습니다
+                            </div>
+                          )}
+                        </div>
                       </>
                     ) : (
                       <>
@@ -423,6 +484,33 @@ export default function TestCasesTable() {
                             onChange={(e) => setPrAnalysisId(e.target.value)}
                             placeholder="PR 분석 ID 입력"
                           />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Figma 디자인 (선택사항)
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                              value={figmaUrl}
+                              onChange={(e) => setFigmaUrl(e.target.value)}
+                              placeholder="https://www.figma.com/file/..."
+                            />
+                            <button
+                              onClick={fetchFigmaData}
+                              disabled={isFetchingFigma || !figmaUrl.trim()}
+                              className="px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
+                            >
+                              {isFetchingFigma ? "불러오는 중..." : "불러오기"}
+                            </button>
+                          </div>
+                          {figmaInfo && (
+                            <div className="mt-2 text-xs text-green-600 bg-green-50 p-2 rounded-lg">
+                              ✓ Figma 디자인 정보가 로드되었습니다
+                            </div>
+                          )}
                         </div>
                       </>
                     )}

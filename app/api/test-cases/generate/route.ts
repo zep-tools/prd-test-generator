@@ -49,29 +49,36 @@ const TEST_CASE_PROMPT = `당신은 숙련된 QA 엔지니어입니다. 다음 �
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { prdContent = "", prAnalysisContent = "", testTypes = ["functional"], customPrompt } = body;
-    
+    const { prdContent = "", prAnalysisContent = "", figmaInfo = "", testTypes = ["functional"], customPrompt } = body;
+
     console.log("Test case generation request:", {
       hasPRD: !!prdContent,
       hasPRAnalysis: !!prAnalysisContent,
+      hasFigmaInfo: !!figmaInfo,
       testTypes,
       hasCustomPrompt: !!customPrompt
     });
-    
+
     let context = "";
-    
+
     // PRD 내용이 있으면 추가
     if (prdContent) {
       context += "=== PRD 내용 ===\n";
       context += prdContent + "\n\n";
     }
-    
+
     // PR 분석 내용이 있으면 추가
     if (prAnalysisContent) {
       context += "=== PR 분석 내용 ===\n";
       context += prAnalysisContent + "\n\n";
     }
-    
+
+    // Figma 디자인 정보가 있으면 추가
+    if (figmaInfo) {
+      context += "=== Figma 디자인 정보 ===\n";
+      context += figmaInfo + "\n\n";
+    }
+
     if (!context) {
       context = "일반적인 웹 애플리케이션 기능";
     }
