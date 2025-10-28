@@ -2,7 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
+// Authentication disabled - public access enabled
+// import { useSession, signOut } from "next-auth/react";
 
 export default function Header() {
   const pathname = usePathname();
@@ -90,38 +91,12 @@ export default function Header() {
 }
 
 function UserMenu() {
-  const { data: session, status } = useSession();
-
-  if (status === "loading") {
-    return (
-      <div className="px-3 py-1.5 text-xs text-gray-500">
-        로딩중...
-      </div>
-    );
-  }
-
-  if (session) {
-    return (
-      <div className="flex items-center space-x-2">
-        <span className="text-xs text-gray-600">
-          {session.user?.email}
-        </span>
-        <button
-          onClick={() => signOut()}
-          className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-all"
-        >
-          로그아웃
-        </button>
-      </div>
-    );
-  }
-
+  // Authentication disabled - showing public access badge
   return (
-    <Link
-      href="/auth/signin"
-      className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all"
-    >
-      로그인
-    </Link>
+    <div className="flex items-center space-x-2">
+      <span className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg border border-green-200">
+        🌐 Public Access
+      </span>
+    </div>
   );
 }
