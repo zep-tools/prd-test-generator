@@ -10,7 +10,8 @@
       "Bash(timeout:*)",
       "Bash(npm run build:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nRemove authentication - enable public access\n\n- Disable NextAuth middleware to allow public access to all routes\n- Update header component to show public access badge\n- Remove session checks from all pages and components\n- Verified build and dev server work correctly\n\nAll features now accessible without login requirement.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nRemove authentication - enable public access\n\n- Disable NextAuth middleware to allow public access to all routes\n- Update header component to show public access badge\n- Remove session checks from all pages and components\n- Verified build and dev server work correctly\n\nAll features now accessible without login requirement.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,7 +1,9 @@
 'use client'
 
-import { SessionProvider } from 'next-auth/react'
+// Authentication disabled - SessionProvider removed
+// import { SessionProvider } from 'next-auth/react'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>
+  // No session management - public access
+  return <>{children}</>
 }
