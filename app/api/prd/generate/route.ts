@@ -250,7 +250,19 @@ export async function POST(request: NextRequest) {
     const hasGeminiKey = geminiApiKey && geminiApiKey !== "your-gemini-api-key";
     const openaiApiKey = process.env.OPENAI_API_KEY;
     const hasOpenAIKey = openaiApiKey && openaiApiKey !== "your-openai-api-key";
-    
+
+    // API 키가 없는 경우 명확한 에러 메시지 반환
+    if (!hasGeminiKey && !hasOpenAIKey) {
+      console.error("No AI API keys configured");
+      return NextResponse.json(
+        {
+          error: "AI API 키가 설정되지 않았습니다",
+          details: "GEMINI_API_KEY 또는 OPENAI_API_KEY를 .env.local 파일에 설정해주세요."
+        },
+        { status: 400 }
+      );
+    }
+
     if (hasGeminiKey) {
       // Gemini API 사용
       try {
@@ -338,10 +350,26 @@ export async function POST(request: NextRequest) {
         console.log("=== Gemini API Response ===");
         console.log("Response length:", text.length);
         console.log("First 200 chars:", text.substring(0, 200));
-      } catch (aiError) {
+      } catch (aiError: any) {
         console.error("Gemini API Error:", aiError);
-        // API 호출 실패 시 Mock 데이터로 대체
-        text = generateMockPRD(body);
+
+        // 구체적인 에러 메시지 반환
+        let errorMessage = "Gemini API 호출 중 오류가 발생했습니다";
+
+        if (aiError.message?.includes("API key")) {
+          errorMessage = "Gemini API 키가 유효하지 않습니다. .env.local 파일의 GEMINI_API_KEY를 확인해주세요.";
+        } else if (aiError.message?.includes("quota") || aiError.message?.includes("limit")) {
+          errorMessage = "Gemini API 사용량 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+        } else if (aiError.message?.includes("503") || aiError.message?.includes("overloaded")) {
+          errorMessage = "Gemini API 서버가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.";
+        } else if (aiError.message) {
+          errorMessage = `Gemini API 오류: ${aiError.message}`;
+        }
+
+        return NextResponse.json(
+          { error: errorMessage },
+          { status: 500 }
+        );
       }
     } else {
       // OpenAI API 사용 여부 확인
@@ -377,14 +405,27 @@ export async function POST(request: NextRequest) {
             maxTokens: 3000,
           });
           text = result.text;
-        } catch (aiError) {
+        } catch (aiError: any) {
           console.error("OpenAI API Error:", aiError);
-          text = generateMockPRD(body);
+
+          // 구체적인 에러 메시지 반환
+          let errorMessage = "OpenAI API 호출 중 오류가 발생했습니다";
+
+          if (aiError.message?.includes("API key") || aiError.message?.includes("Incorrect API")) {
+            errorMessage = "OpenAI API 키가 유효하지 않습니다. .env.local 파일의 OPENAI_API_KEY를 확인해주세요.";
+          } else if (aiError.message?.includes("quota") || aiError.message?.includes("limit") || aiError.message?.includes("insufficient_quota")) {
+            errorMessage = "OpenAI API 사용량 한도를 초과했습니다. 크레딧을 충전하거나 잠시 후 다시 시도해주세요.";
+          } else if (aiError.message?.includes("rate_limit")) {
+            errorMessage = "OpenAI API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+          } else if (aiError.message) {
+            errorMessage = `OpenAI API 오류: ${aiError.message}`;
+          }
+
+          return NextResponse.json(
+            { error: errorMessage },
+            { status: 500 }
+          );
         }
-      } else {
-        // Mock 모드: API 키가 없을 때
-        console.log("=== Using Mock Mode (No OpenAI API Key) ===");
-        text = generateMockPRD(body);
       }
     }
 

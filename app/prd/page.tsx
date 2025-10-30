@@ -5,6 +5,9 @@ import { PRDInput } from "@/types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// Note: metadata export doesn't work in client components
+// SEO is handled by adding a <Head> component or using the parent layout
+
 interface SavedPRD {
   id: string;
   title: string;

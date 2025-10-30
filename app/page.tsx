@@ -1,3 +1,16 @@
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "PRD & Test Case Generator - AI 기반 개발 도구",
+  description: "AI를 활용한 자동화된 PRD 작성 및 테스트 케이스 생성으로 개발 효율성을 극대화하세요. Gemini AI를 활용한 문서 자동화 도구.",
+  keywords: ["PRD 생성", "테스트 케이스 생성", "AI 도구", "개발 도구", "문서 자동화", "Gemini AI"],
+  openGraph: {
+    title: "PRD & Test Case Generator",
+    description: "AI를 활용한 자동화된 PRD 작성 및 테스트 케이스 생성 도구",
+    type: "website",
+  },
+};
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
